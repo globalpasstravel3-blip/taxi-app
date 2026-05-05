@@ -1,64 +1,55 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<style>
-body{font-family:sans-serif;margin:0;background:#f5f5f5;}
-.login-card{background:white;padding:20px;margin:50px auto;width:300px;text-align:center;border-radius:10px;}
-button{padding:10px;background:#ffcc00;border:none;border-radius:5px;}
-.main{display:none;}
-</style>
-</head>
-
-<body>
-
-<div id="loginBox">
-  <div class="login-card">
-    <h2>🚖 Goa Taxi Login</h2>
-    <button onclick="login()">Enter App</button>
-  </div>
-</div>
-
-<div id="app" class="main">
-  <h2 style="padding:10px;">Taxi ERP</h2>
-
-  <button onclick="load()">🔄 Refresh</button>
-
-  <h3>Add Booking</h3>
-  <input id="name" placeholder="Name"><br>
-  <input id="phone" placeholder="Phone"><br>
-  <input id="pickup" placeholder="Pickup"><br>
-  <input id="drop" placeholder="Drop"><br>
-  <input id="fare" placeholder="Fare"><br>
-
-  <button onclick="save()">Save</button>
-
-  <h3>Bookings</h3>
-  <div id="list"></div>
-</div>
-
 <script>
 
 const URL = "https://script.google.com/macros/s/AKfycbwMBmG3ae8MRAR2jEXBaj-wnFljXFOFoYLftaSMQGlVtJ1CjdxVmn_-oMUSPpaOieSsPg/exec";
 
-/* LOGIN BYPASS */
+let currentFilter="ALL";
+let fullData=[];
+
+/* LOGIN (BYPASS TEMP) */
 function login(){
   loginBox.style.display="none";
-  app.style.display="block";
+  app.style.display="flex";
   load();
+}
+
+/* NAV */
+function show(x){
+  dash.style.display="none";
+  book.style.display="none";
+  document.getElementById(x).style.display="block";
+}
+
+/* TAB */
+function setTab(type){
+  currentFilter=type;
+  show('dash');
+  applyFilter();
+}
+
+/* PAYMENT TYPE */
+function handlePaymentType(){
+  advance.style.display = paymentType.value==="Advance" ? "block":"none";
 }
 
 /* SAVE */
 function save(){
 
   const data = {
-    name: name.value,
-    phone: phone.value,
-    pickup: pickup.value,
-    drop: drop.value,
-    fare: fare.value
+    name: document.getElementById("name").value.trim(),
+    phone: document.getElementById("phone").value.trim(),
+    pickup: document.getElementById("pickup").value.trim(),
+    drop: document.getElementById("drop").value.trim(),
+    time: document.getElementById("time").value,
+    car: document.getElementById("car").value,
+    paymentType: document.getElementById("paymentType").value,
+    fare: document.getElementById("fare").value,
+    advance: document.getElementById("advance").value || 0
   };
+
+  if(!data.name){
+    alert("Name required!");
+    return;
+  }
 
   fetch(URL,{
     method:"POST",
@@ -68,11 +59,19 @@ function save(){
   .then(()=>{
     alert("Saved");
     load();
+    show('dash');
   });
 }
 
 /* LOAD */
 function load(){
+
+  const btn = document.getElementById("refreshBtn");
+
+  if(btn){
+    btn.innerText = "🔄 Refreshing...";
+    btn.disabled = true;
+  }
 
   fetch(URL,{
     method:"POST",
@@ -80,18 +79,68 @@ function load(){
   })
   .then(res=>res.json())
   .then(list=>{
-    let html="";
-    list.forEach(i=>{
-      html += `<div style="background:white;margin:5px;padding:10px;">
-        <b>${i.name}</b> | ${i.pickup} | ₹${i.balance}
-      </div>`;
-    });
-    listDiv = document.getElementById("list");
-    listDiv.innerHTML = html;
+    fullData = list;
+    applyFilter();
+
+    if(btn){
+      btn.innerText = "🔄 Refresh";
+      btn.disabled = false;
+    }
   });
 }
 
-</script>
+/* FILTER */
+function applyFilter(){
 
-</body>
-</html>
+  let html="";
+
+  let totalProfit = 0;
+  let totalDebtors = 0;
+  let totalActive = 0;
+  let totalCancelled = 0;
+
+  let filtered=fullData.filter(i=>{
+    if(currentFilter==="ALL") return true;
+    if(currentFilter==="ACTIVE") return i.status!=="Closed" && i.status!=="Cancelled";
+    if(currentFilter==="CLOSED") return i.status==="Closed";
+    if(currentFilter==="CANCELLED") return i.status==="Cancelled";
+    if(currentFilter==="DEBTORS") return Number(i.balance) > 0;
+  });
+
+  filtered.forEach(i=>{
+
+    totalProfit += Number(i.profit) || 0;
+    totalDebtors += Number(i.balance) || 0;
+
+    if(i.status !== "Closed" && i.status !== "Cancelled"){
+      totalActive++;
+    }
+
+    if(i.status === "Cancelled"){
+      totalCancelled++;
+    }
+
+    html+=`
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.name}</td>
+      <td>${i.pickup}</td>
+      <td>${i.status}</td>
+      <td>${i.driverName||""}</td>
+      <td>${i.driverPhone||""}</td>
+      <td>${i.vehicleNo||""}</td>
+      <td>${i.profit}</td>
+      <td>${i.balance}</td>
+      <td>-</td>
+    </tr>`;
+  });
+
+  table.innerHTML=html;
+
+  document.getElementById("totalProfit").innerText = totalProfit;
+  document.getElementById("totalDebtors").innerText = totalDebtors;
+  document.getElementById("totalActive").innerText = totalActive;
+  document.getElementById("totalCancelled").innerText = totalCancelled;
+}
+
+</script>
